@@ -1,4 +1,8 @@
 'use strict';
+(async()=>{
+await(window.giftMediaReady||Promise.resolve());
+const mediaURL=p=>window.giftMediaURL?window.giftMediaURL(p):p;
+'use strict';
 const $ = (q,root=document)=>root.querySelector(q), $$=(q,root=document)=>[...root.querySelectorAll(q)];
 const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const photos=[
@@ -6,11 +10,11 @@ const photos=[
 ].map(([id,title,category])=>({id,title,category}));
 const blessings=['愿你不必太懂事，也能被好好照顾。','愿工作的压力，到了下班就轻轻放下。','愿你认真吃饭，安稳睡觉。','愿你想笑就笑，想休息就休息。','愿你的努力，有温柔的回音。','愿每个普通的早晨，都有好心情。','愿生活细水长流，幸福慢慢发生。','愿你喜欢的事，都能找到时间去做。','愿你永远有，说“不”的底气。','愿风吹来时，也带来好消息。','愿你不慌不忙，走自己的路。','愿心里偶尔下雨，也有人替你撑伞。','愿你拥有，随时出发看海的自由。','愿你被理解，也被坚定地选择。','愿你始终相信，自己值得一切美好。','愿烦恼少一点，睡眠多一点。','愿忙碌的日子，也有小小的甜。','愿你不用完美，也能被爱得满满当当。','愿每次出发，都遇见喜欢的风景。','愿身体健康，心里有光。','愿你想念的人，都在不远的地方。','愿梦想慢慢实现，快乐时时在线。','愿你保留天真，也收获勇气。','愿每一年的你，都更喜欢自己。','愿26岁的你，每天快乐。','以后也是。一直都是。—— 小猫儿'];
 let toastTimer;function toast(msg){$('#toast').textContent=msg;$('#toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('show'),3000)}
-let filtered=photos;function renderAlbum(filter='all'){filtered=photos.filter(p=>filter==='all'||p.category===filter);$('#album').innerHTML=filtered.map(p=>`<button class="album-card" data-photo="${p.id}" aria-label="放大照片：${p.title}"><picture><source type="image/webp" srcset="assets/small/${p.id}.webp"><img src="assets/small/${p.id}.jpg" alt="${p.title}" loading="lazy" decoding="async"></picture><span class="photo-text">${p.title}<small>${String(photos.indexOf(p)+1).padStart(2,'0')} / 24</small></span></button>`).join('');$('#album').scrollLeft=0}renderAlbum();
+let filtered=photos;function renderAlbum(filter='all'){filtered=photos.filter(p=>filter==='all'||p.category===filter);$('#album').innerHTML=filtered.map(p=>`<button class="album-card" data-photo="${p.id}" aria-label="放大照片：${p.title}"><picture><source type="image/webp" srcset="${mediaURL(`assets/small/${p.id}.webp`)}"><img src="${mediaURL(`assets/small/${p.id}.jpg`)}" alt="${p.title}" loading="lazy" decoding="async"></picture><span class="photo-text">${p.title}<small>${String(photos.indexOf(p)+1).padStart(2,'0')} / 24</small></span></button>`).join('');$('#album').scrollLeft=0}renderAlbum();
 $$('[data-filter]').forEach(b=>b.addEventListener('click',()=>{$$('[data-filter]').forEach(x=>x.classList.toggle('active',x===b));renderAlbum(b.dataset.filter)}));
 $('#album-prev').onclick=()=>$('#album').scrollBy({left:-$('#album').clientWidth*.85,behavior:reduced?'instant':'smooth'});$('#album-next').onclick=()=>$('#album').scrollBy({left:$('#album').clientWidth*.85,behavior:reduced?'instant':'smooth'});
 let currentPhoto=0,lightboxList=photos,previousFocus;
-function updatePhoto(){const p=lightboxList[currentPhoto];$('#large-photo').src=`assets/small/${p.id}.jpg`;const fullPhoto=new Image();fullPhoto.onload=()=>{if(lightboxList[currentPhoto]?.id===p.id)$('#large-photo').src=fullPhoto.src};fullPhoto.src=`assets/${p.id}.webp`;$('#large-photo').alt=p.title;$('#photo-caption').textContent=p.title;$('#photo-count').textContent=`${String(currentPhoto+1).padStart(2,'0')} / ${lightboxList.length}`}
+function updatePhoto(){const p=lightboxList[currentPhoto];$('#large-photo').src=mediaURL(`assets/small/${p.id}.jpg`);const fullPhoto=new Image();fullPhoto.onload=()=>{if(lightboxList[currentPhoto]?.id===p.id)$('#large-photo').src=fullPhoto.src};fullPhoto.src=mediaURL(`assets/${p.id}.webp`);$('#large-photo').alt=p.title;$('#photo-caption').textContent=p.title;$('#photo-count').textContent=`${String(currentPhoto+1).padStart(2,'0')} / ${lightboxList.length}`}
 document.addEventListener('click',e=>{const button=e.target.closest('[data-photo]');if(!button)return;lightboxList=button.closest('#album')?filtered:photos;currentPhoto=lightboxList.findIndex(p=>p.id===button.dataset.photo);previousFocus=button;updatePhoto();$('#lightbox').showModal();document.body.style.overflow='hidden'});
 function closePhoto(){$('#lightbox').close()}$('#close-photo').onclick=closePhoto;$('#photo-prev').onclick=()=>{currentPhoto=(currentPhoto-1+lightboxList.length)%lightboxList.length;updatePhoto()};$('#photo-next').onclick=()=>{currentPhoto=(currentPhoto+1)%lightboxList.length;updatePhoto()};$('#lightbox').addEventListener('close',()=>{document.body.style.overflow='';previousFocus?.focus({preventScroll:true})});$('#lightbox').addEventListener('click',e=>{if(e.target===$('#lightbox'))closePhoto()});document.addEventListener('keydown',e=>{if(!$('#lightbox').open)return;if(e.key==='ArrowLeft')$('#photo-prev').click();if(e.key==='ArrowRight')$('#photo-next').click()});let swipeX;$('#large-photo').addEventListener('touchstart',e=>swipeX=e.changedTouches[0].clientX,{passive:true});$('#large-photo').addEventListener('touchend',e=>{let d=e.changedTouches[0].clientX-swipeX;if(Math.abs(d)>45)$(d>0?'#photo-prev':'#photo-next').click()},{passive:true});
 const audio=$('#bgm');audio.volume=.38;let musicOn=false;let audioContext;
@@ -49,7 +53,7 @@ document.addEventListener('error',event=>{
     const picture=img.closest('picture');
     const source=picture?.querySelector('source');
     if(source)source.remove();
-    const clean=img.getAttribute('src').split('?')[0];
+    const currentSrc=img.getAttribute('src');if(currentSrc.startsWith('blob:'))return;const clean=currentSrc.split('?')[0];
     img.src=clean+'?retry='+(attempt+1);
   },1200*(attempt+1));
 },true);
@@ -59,3 +63,5 @@ $$('video').forEach(video=>{
   const ready=()=>{wrap.classList.remove('loading-video');wrap.removeAttribute('aria-busy')};
   video.addEventListener('playing',ready);video.addEventListener('pause',ready);video.addEventListener('error',ready);
 });
+
+})();
