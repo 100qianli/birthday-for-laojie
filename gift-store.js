@@ -28,22 +28,24 @@
   try{
    const response=await fetch(source,{headers:offset?{Range:'bytes='+offset+'-'}:{},cache:'force-cache',signal:controller.signal});
    if(!response.ok||![200,206].includes(response.status))throw Error('Download unavailable');
+   if(response.status===206){const range=response.headers.get('Content-Range');if(range){const parts=/^bytes (\d+)-(\d+)\/(\d+)$/.exec(range);if(!parts||Number(parts[1])!==offset||Number(parts[3])!==manifest.bundle.bytes)throw Error('Range representation mismatch')}}
    const reader=response.body?.getReader();if(!reader)throw Error('Streaming unavailable');
    const prefix=[];let size=0;
    while(size<16384){const part=await reader.read();if(part.done)break;prefix.push(part.value);size+=part.value.byteLength;arm()}
    return {reader,prefix,size,resumed:offset>0&&response.status===206,arm,stop:()=>clearTimeout(timer)};
-  }catch(error){clearTimeout(timer);throw error}
+  }catch(error){clearTimeout(timer);controller.abort();throw error}
  }
  async function download(progress){
   const cache=await caches.open(mediaName),checkpoint=url(manifest.bundle.path)+'.partial';
   let saved=await(await cache.match(checkpoint))?.blob();
   if(saved&&saved.size>manifest.bundle.bytes){saved=null;await cache.delete(checkpoint)}
+  let skipCDN=false;
   for(let attempt=0;attempt<3;attempt++){
    let parts=saved?[saved]:[],size=saved?.size||0,lastCheckpoint=size,stream;
-   const controllers=sources().map(()=>new AbortController());
+   const sourceList=sources().filter((_,i)=>!skipCDN||i===0),controllers=sourceList.map(()=>new AbortController());
    try{
     if(size<manifest.bundle.bytes){
-     stream=await Promise.any(sources().map((source,i)=>openStream(source,size,controllers[i]).then(value=>({value,index:i}))));
+     stream=await Promise.any(sourceList.map((source,i)=>openStream(source,size,controllers[i]).then(value=>({value,index:i}))));
      controllers.forEach((c,i)=>{if(i!==stream.index)c.abort()});stream=stream.value;
      if(!stream.resumed){parts=[];size=0;lastCheckpoint=0}
      parts.push(...stream.prefix);size+=stream.size;progress({bytes:size,total:manifest.bundle.bytes,phase:'download'});
@@ -53,7 +55,7 @@
      stream.stop();
     }
     const blob=new Blob(parts);
-    if(blob.size!==manifest.bundle.bytes||await hash(blob)!==manifest.bundle.sha256){await cache.delete(checkpoint);saved=null;throw Error('Download incomplete')}
+    if(blob.size!==manifest.bundle.bytes||await hash(blob)!==manifest.bundle.sha256){await cache.delete(checkpoint);saved=null;skipCDN=true;throw Error('Download incomplete')}
     progress({bytes:size,total:manifest.bundle.bytes,phase:'saving'});
     for(const asset of manifest.assets){const slice=blob.slice(asset.offset,asset.offset+asset.bytes,asset.type);await putAsset(asset,slice)}
     await cache.delete(checkpoint);return;
