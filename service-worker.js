@@ -1,13 +1,21 @@
 'use strict';
-importScripts('./precache-manifest.js');
-const cacheName=self.BIRTHDAY_MANIFEST.cacheName;
+importScripts('./precache-fast.js');
+const manifest=self.FAST_GIFT_MANIFEST;
+const cacheName='birthday-laojie-fast-'+manifest.version;
+const mediaName='birthday-laojie-mobile-media-v1';
 const scopeURL=new URL(self.registration.scope);
+const aliases=new Map();for(const a of manifest.assets)for(const p of [a.path,...a.aliases||[]])aliases.set(new URL(p,scopeURL).href,a);
 self.addEventListener('install',event=>event.waitUntil(self.skipWaiting()));
 self.addEventListener('activate',event=>event.waitUntil(self.clients.claim()));
 async function cachedResponse(request){
  const url=new URL(request.url);url.search='';url.hash='';
- if(url.pathname.endsWith('/'))url.pathname+='index.html';
- const cache=await caches.open(cacheName),cached=await cache.match(url.href);
+ if(url.pathname.endsWith('/')||url.pathname===scopeURL.pathname+'index.html')url.pathname=scopeURL.pathname+'start.html';
+ const asset=aliases.get(url.href),cache=await caches.open(asset?.group==='shell'||!asset?cacheName:mediaName);
+ const cached=await cache.match(asset?new URL(asset.path,scopeURL).href:url.href);
+ if(request.mode==='navigate'&&new URL(request.url).searchParams.has('v')&&cached){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),1500);
+  try{const fresh=await fetch(new Request(request,{signal:controller.signal}));if(fresh.ok)return fresh}catch{}finally{clearTimeout(timer)}
+ }
  if(!cached)return fetch(request);
  const range=request.headers.get('range');
  if(!range)return cached;
@@ -25,7 +33,4 @@ async function cachedResponse(request){
 self.addEventListener('fetch',event=>{
  const url=new URL(event.request.url);
  if(event.request.method==='GET'&&url.origin===scopeURL.origin&&url.pathname.startsWith(scopeURL.pathname))event.respondWith(cachedResponse(event.request));
-});
-self.addEventListener('message',event=>{
- if(event.data?.type==='CACHE_READY')event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('birthday-laojie-')&&k!==cacheName).map(k=>caches.delete(k)))));
 });
